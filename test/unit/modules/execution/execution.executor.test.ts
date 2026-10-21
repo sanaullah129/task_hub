@@ -156,7 +156,7 @@ describe('TaskExecutor', () => {
     await executor(() => Promise.resolve({}), logger).execute(claimed);
 
     const messages = capture.lines().map((line) => line['message']);
-    expect(messages).toEqual(['attempt started', 'attempt finished']);
+    expect(messages).toEqual(['task attempt started', 'task attempt finished', 'task finished, webhook event will be created']);
     expect(capture.lines()[1]).toMatchObject({
       taskId: claimed._id,
       customerId: claimed.customerId,
@@ -164,6 +164,7 @@ describe('TaskExecutor', () => {
       attempt: 1,
       next: 'Completed',
     });
+    expect(capture.lines()[2]).toMatchObject({ taskId: claimed._id, status: 'Completed', attempts: 1, correlationId: claimed.correlationId });
   });
 
   it('uses the real clock when none is injected', async () => {

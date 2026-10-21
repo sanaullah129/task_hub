@@ -57,7 +57,7 @@ describe('shared HTTP middleware', () => {
         path: '/v1/tasks/tsk_missing',
         status: 404,
       });
-      expect(typeof capture.lines()[0]?.['durationMs']).toBe('number');
+      expect(typeof capture.lines().find((line) => line['message'] === 'request completed')?.['durationMs']).toBe('number');
     });
   });
 

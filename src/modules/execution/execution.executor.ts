@@ -1,6 +1,7 @@
 import { performance } from 'node:perf_hooks';
 import type { Config } from '../../config/config';
 import type { Logger } from '../../observability/logger';
+import { taskLog } from '../../observability/logContext';
 import { noopMetrics, type Metrics } from '../../observability/metrics';
 import type { RandomSource } from '../../shared/utils/backoff';
 import type { TaskExecutionRepository } from '../tasks/task.execution.repository';
@@ -32,14 +33,9 @@ export class TaskExecutor {
   /** Runs one claimed attempt and records its outcome. Never rejects on handler failures. */
   async execute(task: TaskDocument): Promise<void> {
     const { repository, handlers, config, workerId } = this.deps;
-    const log = this.deps.logger.child({
-      taskId: task._id,
-      customerId: task.customerId,
-      correlationId: task.correlationId,
-      attempt: task.attempts,
-    });
+    const log = taskLog(this.deps.logger, task).child({ attempt: task.attempts });
     const startedAt = performance.now();
-    log.info('attempt started', { taskType: task.taskType });
+    log.info('task attempt started', { taskType: task.taskType, maxAttempts: task.maxAttempts, timeoutMs: task.timeoutMs });
 
     const result = await this.runWithTimeout(task, handlers);
     const durationMs = Math.round(performance.now() - startedAt);
@@ -58,16 +54,20 @@ export class TaskExecutor {
     );
 
     if (updated === null) {
-      log.warn('attempt result discarded: task is no longer owned by this attempt', { durationMs });
+      log.warn('task attempt result discarded: task is no longer owned by this attempt', { durationMs });
       return;
     }
-    log.info('attempt finished', { durationMs, result: result.kind, next: updated.status, reason: completion.reason });
+    log.info('task attempt finished', { durationMs, result: result.kind, next: updated.status, reason: completion.reason });
     (this.deps.metrics ?? noopMetrics).recordAttempt({
       taskType: task.taskType,
       outcome: result.kind,
       durationMs,
     });
 
+    if (isTerminalStatus(updated.status)) {
+      const turnaroundMs = (updated.finishedAt ?? this.now()).getTime() - updated.createdAt.getTime();
+      log.info('task finished, webhook event will be created', { status: updated.status, attempts: updated.attempts, turnaroundMs, errorCode: updated.error?.code });
+    }
     if (this.deps.onTerminal !== undefined && isTerminalStatus(updated.status)) {
       try {
         await this.deps.onTerminal(updated);

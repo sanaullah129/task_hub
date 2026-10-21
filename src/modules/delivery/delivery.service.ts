@@ -1,5 +1,6 @@
 import type { Config } from '../../config/config';
 import type { Logger } from '../../observability/logger';
+import { eventLog, hostOf } from '../../observability/logContext';
 import { noopMetrics, type Metrics } from '../../observability/metrics';
 import type { RandomSource } from '../../shared/utils/backoff';
 import type { CustomerRepository } from '../customers/customer.repository';
@@ -31,16 +32,16 @@ export class DeliveryService {
   /** Sends one attempt for a leased event and records the outcome. */
   async deliver(event: EventDocument): Promise<void> {
     const { events, customers, client, config, workerId } = this.deps;
-    const log = this.deps.logger.child({
-      eventId: event._id,
-      taskId: event.taskId,
-      customerId: event.customerId,
-      correlationId: event.correlationId,
-    });
+    const log = eventLog(this.deps.logger, event);
     const attemptNumber = event.delivery.attemptCount + 1;
     const startedAt = this.now();
 
     const customer = await customers.findById(event.customerId);
+    if (event.url === null) {
+      log.warn('webhook delivery has no URL configured, recording a failed attempt', { attempt: attemptNumber, eventType: event.eventType });
+    } else {
+      log.info('webhook delivery started', { attempt: attemptNumber, maxAttempts: event.delivery.maxAttempts, eventType: event.eventType, host: hostOf(event.url), signed: customer?.webhook?.secret !== undefined });
+    }
     const response =
       event.url === null
         ? { error: 'no webhook URL is configured for this event', durationMs: 0 }
@@ -75,16 +76,20 @@ export class DeliveryService {
     });
 
     if (updated === null) {
-      log.warn('delivery attempt discarded: lease is no longer held', { attempt: attemptNumber });
+      log.warn('webhook delivery attempt discarded: lease is no longer held', { attempt: attemptNumber });
       return;
     }
-    log.info('delivery attempt finished', {
+    const level = result.kind === 'delivered' ? 'info' : result.kind === 'retry' ? 'warn' : 'error';
+    log[level]('webhook delivery attempt finished', {
       attempt: attemptNumber,
+      eventType: event.eventType,
+      host: hostOf(event.url),
       statusCode: response.statusCode,
       error: response.error,
       durationMs: response.durationMs,
       result: result.kind,
       deliveryStatus: updated.delivery.status,
+      nextAttemptAt: updated.delivery.nextAttemptAt,
     });
   }
 

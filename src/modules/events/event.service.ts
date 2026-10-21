@@ -1,5 +1,6 @@
 import type { Config } from '../../config/config';
 import type { Logger } from '../../observability/logger';
+import { eventLog, hostOf } from '../../observability/logContext';
 import type { Metrics } from '../../observability/metrics';
 import { AppError, NotFoundError } from '../../shared/errors/appErrors';
 import type { CustomerRepository } from '../customers/customer.repository';
@@ -92,14 +93,11 @@ export class EventService {
 
     if (created) {
       metrics.recordTaskTerminal({ taskType: task.taskType, status: task.status });
-      logger.info('event created', {
-        eventId: event._id,
-        taskId: task._id,
-        customerId: task.customerId,
-        correlationId: task.correlationId,
-        eventType,
-        deliveryStatus: event.delivery.status,
-      });
+      const destination = task.webhookUrl !== null ? 'task override' : url !== null ? 'customer default' : 'none';
+      eventLog(logger, event, task.correlationId).info(
+        url === null ? 'webhook event created, no URL configured so delivery is skipped' : 'webhook event created, delivery queued',
+        { eventType, taskStatus: task.status, deliveryStatus: event.delivery.status, destination, host: hostOf(url), maxAttempts: event.delivery.maxAttempts },
+      );
     }
     return event;
   }
@@ -117,7 +115,12 @@ export class EventService {
     const { events, config, logger } = this.deps;
     const requeued = await events.requeueFailed(eventId, config.delivery.maxAttempts, this.now());
     if (requeued !== null) {
-      logger.info('delivery requeued by operator', { eventId, taskId: requeued.taskId });
+      eventLog(logger, requeued).info('webhook delivery requeued by operator', {
+        eventType: requeued.eventType,
+        previousAttempts: requeued.delivery.attemptCount,
+        maxAttempts: requeued.delivery.maxAttempts,
+        host: hostOf(requeued.url),
+      });
       return requeued;
     }
     const existing = await events.findById(eventId);

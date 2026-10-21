@@ -4,6 +4,8 @@ import { CustomerService, newWebhookSecret } from '../../../../src/modules/custo
 import { FIXED_NOW } from '../../../mocks/tasks/taskFixtures';
 import { InMemoryCustomerRepository } from '../../../mocks/customers/inMemoryCustomerRepository';
 import { silentLogger } from '../../../mocks/helpers';
+import { createLogCapture } from '../../../mocks/logCapture';
+import { createLogger } from '../../../../src/observability/logger';
 
 const setup = () => {
   const repository = new InMemoryCustomerRepository();
@@ -50,6 +52,21 @@ describe('CustomerService', () => {
 
     expect(view).toEqual({ customerId: 'cust_a', url: 'https://hooks.example.com/', secretConfigured: true });
     expect(JSON.stringify(view)).not.toContain('whsec_');
+  });
+
+  it('logs the host only when the webhook is read and warns when it is missing', async () => {
+    const repository = new InMemoryCustomerRepository();
+    const capture = createLogCapture();
+    const service = new CustomerService({ repository, logger: createLogger({ logLevel: 'debug' }, {}, [capture.transport]), now: () => FIXED_NOW });
+    await service.setWebhook({ customerId: 'cust_a', url: 'https://hooks.example.com/secret-path' });
+
+    await service.getWebhook('cust_a');
+    await expect(service.getWebhook('cust_x')).rejects.toBeInstanceOf(NotFoundError);
+
+    const lines = capture.lines();
+    expect(lines.find((line) => line['message'] === 'customer webhook read')).toMatchObject({ customerId: 'cust_a', host: 'hooks.example.com' });
+    expect(lines.find((line) => line['message'] === 'customer webhook requested but not configured')).toMatchObject({ level: 'warn', customerId: 'cust_x' });
+    expect(JSON.stringify(lines)).not.toContain('secret-path');
   });
 
   it('throws NotFoundError for an unknown customer or one without a webhook', async () => {

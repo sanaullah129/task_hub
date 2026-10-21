@@ -1,5 +1,6 @@
 import type { Config } from '../../config/config';
 import type { Logger } from '../../observability/logger';
+import { taskLog } from '../../observability/logContext';
 import type { RandomSource } from '../../shared/utils/backoff';
 import type { TaskExecutionRepository } from '../tasks/task.execution.repository';
 import type { TaskRecoveryRepository } from '../tasks/task.recovery.repository';
@@ -63,10 +64,7 @@ export class ReconcilerService {
         continue;
       }
       summary.leasesRecovered += 1;
-      logger.warn('recovered task with expired lease', {
-        taskId: task._id,
-        customerId: task.customerId,
-        correlationId: task.correlationId,
+      taskLog(logger, task).warn('task attempt abandoned, lease expired and recovered by reconciler', {
         attempt: task.attempts,
         abandonedWorker: task.lease.workerId,
         next: updated.status,
@@ -86,7 +84,7 @@ export class ReconcilerService {
       summary.eventsEmitted += 1;
     } catch (error) {
       summary.eventFailures += 1;
-      this.deps.logger.error('failed to create event for terminal task', { taskId: task._id, error });
+      taskLog(this.deps.logger, task).error('failed to create webhook event for terminal task', { status: task.status, error });
     }
   }
 }

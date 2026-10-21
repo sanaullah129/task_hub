@@ -1,5 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import type { Logger } from '../../observability/logger';
+import { hostOf } from '../../observability/logContext';
 import { NotFoundError } from '../../shared/errors/appErrors';
 import type { CustomerRepository } from './customer.repository';
 
@@ -35,7 +36,7 @@ export class CustomerService {
     await this.deps.repository.upsertWebhook(input.customerId, { url: input.url, secret }, this.now());
     this.deps.logger.info('customer webhook configured', {
       customerId: input.customerId,
-      url: input.url,
+      host: hostOf(input.url),
       secretGenerated: generatedSecret !== undefined,
     });
     return {
@@ -47,7 +48,11 @@ export class CustomerService {
 
   async getWebhook(customerId: string): Promise<WebhookConfigView> {
     const customer = await this.deps.repository.findById(customerId);
-    if (customer?.webhook == null) throw new NotFoundError('webhook', customerId);
+    if (customer?.webhook == null) {
+      this.deps.logger.warn('customer webhook requested but not configured', { customerId });
+      throw new NotFoundError('webhook', customerId);
+    }
+    this.deps.logger.debug('customer webhook read', { customerId, host: hostOf(customer.webhook.url) });
     return { customerId, url: customer.webhook.url, secretConfigured: true };
   }
 }

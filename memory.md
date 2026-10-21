@@ -7,6 +7,7 @@
 - Module layout: src/modules/<feature>/<feature>.{constants,types,model,repository,service,controller,routes,validation,utils}.ts + index.ts; shared code in src/shared; src/container.ts is the composition root; modules never import src/database; dependency direction tasks -> events -> webhooks/customers.
 - Tests: test/unit (no DB) mirrors src; test/integration (real local mongod, throwaway DBs taskhub_it_*, dropped after) incl. system.test.ts end to end; test/mocks has helpers, harness (real routers over in-memory fakes), fakes per module, webhookReceiver, testDatabase. Coverage threshold 80% (unit); Mongoose repos are covered by integration tests.
 - Edit tools: in single replace_string_in_file calls use real newlines (not `\n`); do not create stray files; never commit/push unless the user asks (commit-me skill = personal identity via `git -c user.name/email`).
+- Logging convention: lowercase one-line messages, one log line per step; use `taskLog`/`eventLog` (src/observability/logContext.ts) for context and `hostOf` for webhook URLs (never log full URLs or payloads).
 - User's own edit in package.json: `start` is `npm run build && node dist/index.js` (leave it).
 
 ## Status (all planned work implemented)

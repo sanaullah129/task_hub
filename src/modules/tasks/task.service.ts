@@ -2,6 +2,7 @@ import type { Config } from '../../config/config';
 import { NotFoundError } from '../../shared/errors/appErrors';
 import type { JsonObject } from '../../shared/types/json';
 import type { Logger } from '../../observability/logger';
+import { taskLog } from '../../observability/logContext';
 import type { TaskType } from './task.constants';
 import { IdempotencyConflictError } from './task.errors';
 import type { TaskRepository, TaskListQuery, TaskPage } from './task.repository';
@@ -70,27 +71,27 @@ export class TaskService {
     };
 
     const { created, task } = await repository.insertIdempotent(candidate);
-    const log = logger.child({
-      taskId: task._id,
-      customerId: task.customerId,
-      correlationId: input.correlationId,
-    });
+    const log = taskLog(logger, task, input.correlationId);
 
     if (created) {
-      log.info('task submitted', { taskType: task.taskType });
+      log.info('task created and queued for execution', { idempotencyKey: input.idempotencyKey, taskType: task.taskType, status: task.status, maxAttempts: task.maxAttempts, timeoutMs: task.timeoutMs, slaMs: task.slaMs, webhookOverride: task.webhookUrl !== null });
       return { task, created };
     }
     if (task.payloadHash !== payloadHash) {
-      log.warn('idempotency key reused with different request');
+      log.warn('idempotency key reused with a different request, rejecting', { idempotencyKey: input.idempotencyKey, existingTaskType: task.taskType, requestedTaskType: input.taskType });
       throw new IdempotencyConflictError(input.idempotencyKey);
     }
-    log.info('duplicate submission returned existing task', { status: task.status });
+    log.info('duplicate submission, returning existing task', { idempotencyKey: input.idempotencyKey, status: task.status, attempts: task.attempts });
     return { task, created };
   }
 
   async get(taskId: string): Promise<TaskDocument> {
     const task = await this.deps.repository.findById(taskId);
-    if (task === null) throw new NotFoundError('task', taskId);
+    if (task === null) {
+      this.deps.logger.warn('task lookup found nothing', { taskId });
+      throw new NotFoundError('task', taskId);
+    }
+    taskLog(this.deps.logger, task).debug('task status read', { status: task.status });
     return task;
   }
 

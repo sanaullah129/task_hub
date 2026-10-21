@@ -157,6 +157,31 @@ describe('DeliveryService', () => {
     expect(events.events.get(event._id)?.delivery).toMatchObject({ status: 'Pending', lastError: 'no webhook URL is configured for this event' });
   });
 
+  it('logs delivered at info, retries at warn and exhausted attempts at error', async () => {
+    const level = () => capture.lines().filter((line) => line['message'] === 'webhook delivery attempt finished').map((line) => line['level']);
+
+    respond({ statusCode: 200, durationMs: 1 });
+    await service().deliver(await leased({ _id: 'evt_a', taskId: 'tsk_a' }));
+    respond({ statusCode: 500, durationMs: 1 });
+    await service().deliver(await leased({ _id: 'evt_b', taskId: 'tsk_b' }));
+    const base = buildEventDocument();
+    await service().deliver(await leased({ _id: 'evt_c', taskId: 'tsk_c', delivery: { ...base.delivery, attemptCount: 5, maxAttempts: 6 } }));
+
+    expect(level()).toEqual(['info', 'warn', 'error']);
+  });
+
+  it('warns when the event has no URL', async () => {
+    const event = await leased({ url: null });
+
+    await service().deliver(event);
+
+    expect(capture.lines().find((line) => String(line['message']).includes('no URL configured'))).toMatchObject({
+      level: 'warn',
+      eventId: event._id,
+      correlationId: 'cor_1',
+    });
+  });
+
   it('records webhook metrics for successes and failures', async () => {
     const delivered = await leased({ _id: 'evt_ok', taskId: 'tsk_ok' });
     respond({ statusCode: 200, durationMs: 20 });
@@ -182,13 +207,24 @@ describe('DeliveryService', () => {
     expect(capture.lines().some((line) => String(line['message']).includes('lease is no longer held'))).toBe(true);
   });
 
-  it('logs each attempt with the correlation identifiers', async () => {
+  it('logs the start and each attempt with the correlation identifiers and only the host of the URL', async () => {
     respond({ statusCode: 200, durationMs: 7 });
     const event = await leased();
 
     await service().deliver(event);
 
-    expect(capture.lines().find((line) => line['message'] === 'delivery attempt finished')).toMatchObject({
+    const lines = capture.lines();
+    expect(lines.find((line) => line['message'] === 'webhook delivery started')).toMatchObject({
+      eventId: event._id,
+      taskId: event.taskId,
+      customerId: 'cust_acme',
+      correlationId: 'cor_1',
+      attempt: 1,
+      eventType: 'task.completed',
+      host: 'hooks.example.com',
+      signed: true,
+    });
+    expect(lines.find((line) => line['message'] === 'webhook delivery attempt finished')).toMatchObject({
       eventId: event._id,
       taskId: event.taskId,
       customerId: 'cust_acme',
@@ -197,7 +233,9 @@ describe('DeliveryService', () => {
       statusCode: 200,
       result: 'delivered',
       deliveryStatus: 'Delivered',
+      host: 'hooks.example.com',
     });
+    expect(JSON.stringify(lines)).not.toContain('/tasks');
   });
 
   it('works with the real clock and without metrics', async () => {

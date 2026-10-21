@@ -206,7 +206,8 @@ Out of scope for v1; optional TTL index on terminal `tasks`/`events` can be adde
 
 - Every log line is JSON with `timestamp, level, msg, service, role` plus `correlationId`, `taskId`, `customerId`, `eventId`, `attempt` where applicable.
 - `correlationId` is read from `X-Correlation-Id` (or generated), stored on the task, copied to the event, and sent in webhook headers (`X-TaskHub-Correlation-Id`).
-- Logged events: request completed, task submitted/duplicate, state transition, attempt started/finished, event created, delivery attempt result, reconciler actions.
+- Logged events (one line per step, lowercase sentences): `task created and queued for execution` / `duplicate submission, returning existing task` / `idempotency key reused with a different request, rejecting`, `task attempt started`, `task attempt finished`, `task finished, webhook event will be created`, `webhook event created, delivery queued` (or `..., no URL configured so delivery is skipped`), `webhook delivery started`, `webhook delivery attempt finished`, `webhook delivery requeued by operator`, `task attempt abandoned, lease expired and recovered by reconciler`, `customer webhook configured`, `request completed`.
+- Task lines are built with `taskLog(logger, task)` and webhook-event lines with `eventLog(logger, event)` from `observability/logContext.ts`, so they always carry `taskId`, `customerId`, `correlationId` (plus `eventId` for events). Webhook URLs are logged as `host` only (`hostOf`), never in full.
 - Secrets and payload bodies are not logged.
 
 ## 7. Project layout
