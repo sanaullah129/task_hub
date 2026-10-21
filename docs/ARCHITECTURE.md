@@ -206,26 +206,41 @@ Out of scope for v1; optional TTL index on terminal `tasks`/`events` can be adde
 - Logged events: request completed, task submitted/duplicate, state transition, attempt started/finished, event created, delivery attempt result, reconciler actions.
 - Secrets and payload bodies are not logged.
 
-## 7. Project layout (proposed)
+## 7. Project layout
+
+Code is split by module (feature). Each module owns its constants, types, Mongoose model, repository, service, controller, routes and utilities, and exposes a small public API through its `index.ts`. Code used by several modules lives in `shared/`.
 
 ```
 task_hub/
-  docs/                     PRD, architecture, task prompt
+  docs/                         PRD, architecture, improvements, task prompt
   src/
-    config/                 env parsing (zod)
-    domain/                 state machine, backoff, errors, types
-    db/                     mongoose schemas, connection, index creation, repositories (tasks, events, customers)
-    services/               taskService, executor, deliveryService, reconciler, metricsService
-    handlers/               simulated task handlers
-    api/                    express app, routes, middleware
-    workers/                task worker loop, delivery worker loop
-    observability/          winston logger + redaction, prom metrics, percentile util
-    index.ts                role bootstrap
-  scripts/                  mock-webhook-receiver, demo
+    index.ts                    bootstrap: config, DB, roles, graceful shutdown
+    app.ts                      Express composition (global middleware + module routers)
+    config/                     env parsing and typed config (zod)
+    database/                   Mongoose connection, model registry, index creation
+    observability/              winston logger + redaction (later: prom metrics, percentiles)
+    shared/
+      errors/                   AppError, ValidationError, NotFoundError
+      http/                     request context, correlation / request-log / error middleware
+      database/                 shared schema options and sub-schemas (lease)
+      types/                    Json types, Lease
+      utils/                    backoff, ids, canonicalJson, zod helpers, mongo error helpers
+    modules/
+      tasks/                    task.constants / types / model / stateMachine / errors / utils
+                                task.validation / repository / service / controller / routes / view, index.ts
+      events/                   event.constants / types / model / utils (delivery logic lands in slice 5)
+      customers/                customer.types / model (webhook config API lands in slice 5)
+      webhooks/                 webhookUrl validation (signing and delivery land in slice 5)
+      health/                   health controller / routes
+      (worker, reconciler, delivery, metrics, ops modules are added in later slices)
+  scripts/                      mock-webhook-receiver, demo (later slice)
   test/
-    unit/                   pure logic + services with mocked repositories
-    integration/            local Mongo test database (idempotency, claim concurrency, recovery)
+    unit/                       mirrors src/ (shared, config, database, observability, modules/<name>)
+    integration/                mirrors src/ against a local Mongo test database
+    mocks/                      global helpers (config, logger capture, test DB) and per-module mocks (mocks/tasks)
 ```
+
+Conventions: modules never import from `database/` (it imports their schemas); a module may import another module's public API or constants only in the direction tasks -> events -> webhooks/customers, never the reverse; controllers are thin (parse, call service, shape response); services hold business rules and depend on repository interfaces so unit tests use in-memory fakes.
 
 ## 8. Implementation slices (each ends with unit tests run and your review)
 

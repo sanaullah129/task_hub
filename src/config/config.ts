@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { type TaskType } from '../domain/types.js';
+import { type TaskType } from '../modules/tasks/task.constants';
 
 export const ROLES = ['api', 'worker', 'delivery', 'reconciler'] as const;
 export type Role = (typeof ROLES)[number];

@@ -1,5 +1,5 @@
 import winston, { type Logger } from 'winston';
-import type { Config } from '../config/config.js';
+import type { Config } from '../config/config';
 
 export type { Logger };
 

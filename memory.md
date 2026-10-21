@@ -8,14 +8,25 @@
 - Steps: 1) PRD  2) Architecture + tool choices  3) Implementation in slices  4) Unit tests for each slice (run and fix)  5) Demo + metrics.
 - Unit tests are generated alongside each code slice.
 - Rules: TypeScript only, NEVER use `any` (eslint enforces). Package manager: pnpm (not npm). Run single test files with `pnpm vitest run <path>` (no `--`).
-- Tests live in test/unit (Vitest), 80% coverage threshold; shared mocks in test/mocks.
+- Imports are extensionless (no `.js`, no `/index`): tsconfig uses module ESNext + moduleResolution Bundler; `pnpm build` bundles with tsup (tsup.config.ts) to dist/index.js; dev uses tsx, tests use vitest. Do not reintroduce `.js` specifiers or tsc-emitted builds.
+- Tests live in test/unit (Vitest, `pnpm test`, `pnpm test:cov`) and test/integration (`pnpm test:integration`, needs local mongod, uses throwaway DB taskhub_it_*, dropped after). 80% coverage threshold; shared mocks/fixtures in test/mocks (helpers, fixtures, inMemoryTaskRepository, logCapture, testDatabase).
+- Don't create stray files by mistake; user's own edit in package.json: start script is `npm run build && node dist/index.js` (leave it alone, don't commit it unless asked).
 
 ## Status
 - [x] Step 1: PRD -> docs/PRD.md (v0.2, review answers incorporated; decisions in PRD section 7)
 - [x] Step 2: Architecture + tools + schema -> docs/ARCHITECTURE.md (v0.2, approved by user; later switched to Mongoose + Winston)
-- [x] Slice 1 (scaffold, config, winston logger, domain types, state machine, backoff, ids, mongoose schemas/connection/index creation): DONE, awaiting user review. 62 tests pass, typecheck + lint clean, ~97% coverage; schemas/indexes/unique idempotency verified on local Mongo.
-- [ ] Slice 2: task submission API + idempotency (next; needs express, supertest or similar)
-- [ ] Slices 3-8: see ARCHITECTURE section 8
+- [x] Slice 1 committed and pushed (a08aeec on origin/main, personal identity via commit-me skill).
+- [x] Slice 2: task submission API + idempotency: DONE, awaiting user review, NOT yet committed. 150 unit tests + 9 integration tests (real local Mongo, 50-way concurrent same-key race => 1 task) pass; typecheck/lint clean; ~94% unit coverage; curl-verified end to end.
+  - Files: src/api/{app,middleware,requestContext,parseSubmitRequest,schemas,taskView,tasksRouter}.ts, src/services/taskService.ts, src/db/taskRepository.ts, src/domain/{errors,payloadHash,webhookUrl}.ts
+  - POST /v1/tasks (202 new, 200 duplicate, 409 conflict, 400 validation, 413 too large), GET /v1/tasks/:taskId, GET /healthz.
+  - Per-type payload schemas (FR-4): document_processing{documentId}, report_generation{reportType}, data_sync{source,target}; optional simulate{durationMs,failure:retryable|fatal|hang,failTimes} hints for slice 3 handlers; extra fields allowed.
+  - Webhook override URL: https only, no credentials, no private/loopback hosts unless DEMO_MODE=true (literal-host check only; DNS pinning in IMPROVEMENTS).
+  - Correlation id: X-Correlation-Id accepted only if /^[A-Za-z0-9._:-]{1,128}$/, else generated (cor_ prefix); echoed in response header.
+  - Task view hides payload/lease/history/idempotencyKey. GET has no customer ownership check (no auth yet).
+- [x] Slice 2 refactored into modules (user request): feature modules under src/modules/{tasks,events,customers,webhooks,health}, shared code under src/shared/{errors,http,database,types,utils}, src/database (connection+indexes), src/app.ts composes. Tests mirror src (test/unit/<path>, test/integration/<path>, test/mocks + test/mocks/tasks). 161 unit + 9 integration tests pass, typecheck/lint clean. Layout + conventions documented in docs/ARCHITECTURE.md section 7.
+  - New code goes in a module: <name>.constants/types/model/repository/service/controller/routes/validation/utils + index.ts (createXModule wiring); no `any`; modules never import src/database; dependency direction tasks -> events -> webhooks/customers.
+- [ ] Slice 3: task worker module (claim via findOneAndUpdate, handlers, timeout, retry, terminal transitions) - next
+- [ ] Slices 4-8: see ARCHITECTURE section 8
 - Local env: Node 24, pnpm 11, local mongod running at mongodb://127.0.0.1:27017 (smoke tests use throwaway DB `taskhub_smoke`, dropped after).
 - pnpm-workspace.yaml allows esbuild build script (needed for tsx/vitest).
 
