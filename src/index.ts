@@ -1,9 +1,9 @@
 import type { Server } from 'node:http';
 import { createApp } from './app';
 import { loadConfig } from './config/config';
+import { createContainer } from './container';
 import { connectDatabase } from './database/client';
 import { ensureIndexes } from './database/indexes';
-import { MongooseTaskRepository } from './modules/tasks';
 import { createLogger } from './observability/logger';
 
 async function main(): Promise<void> {
@@ -13,22 +13,15 @@ async function main(): Promise<void> {
   await ensureIndexes(database);
   logger.info('taskhub started', { roles: config.roles, db: config.mongo.dbName });
 
+  const container = createContainer({ config, logger, database });
+
   let server: Server | undefined;
   if (config.roles.includes('api')) {
     const apiLogger = logger.child({ role: 'api' });
-    const app = createApp({
-      config,
-      logger: apiLogger,
-      taskRepository: new MongooseTaskRepository(database.tasks),
-      isHealthy: async () => {
-        const db = database.connection.db;
-        if (db === undefined) return false;
-        await db.command({ ping: 1 });
-        return true;
-      },
-    });
+    const app = createApp({ config, logger: apiLogger, routes: container.routes, metrics: container.metrics });
     server = app.listen(config.port, () => apiLogger.info('api listening', { port: config.port }));
   }
+  for (const lifecycle of container.lifecycles) lifecycle.start();
 
   const shutdown = async (signal: string): Promise<void> => {
     logger.info('shutting down', { signal });
@@ -36,6 +29,7 @@ async function main(): Promise<void> {
       const api = server;
       await new Promise<void>((resolve) => api.close(() => resolve()));
     }
+    await Promise.all(container.lifecycles.map((lifecycle) => lifecycle.stop()));
     await database.close();
     process.exit(0);
   };

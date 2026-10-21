@@ -4,7 +4,7 @@ import type { JsonObject } from '../../shared/types/json';
 import type { Logger } from '../../observability/logger';
 import type { TaskType } from './task.constants';
 import { IdempotencyConflictError } from './task.errors';
-import type { TaskRepository } from './task.repository';
+import type { TaskRepository, TaskListQuery, TaskPage } from './task.repository';
 import type { TaskDocument } from './task.types';
 import { hashTaskRequest, newTaskId } from './task.utils';
 
@@ -62,7 +62,7 @@ export class TaskService {
       error: null,
       attemptLog: [],
       history: [{ from: null, to: 'Pending', at: now, reason: 'submitted' }],
-      eventEmitted: false,
+      eventPending: false,
       createdAt: now,
       updatedAt: now,
       firstStartedAt: null,
@@ -92,5 +92,9 @@ export class TaskService {
     const task = await this.deps.repository.findById(taskId);
     if (task === null) throw new NotFoundError('task', taskId);
     return task;
+  }
+
+  list(query: TaskListQuery): Promise<TaskPage> {
+    return this.deps.repository.list(query);
   }
 }

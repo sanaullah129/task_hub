@@ -1,6 +1,6 @@
 # TaskHub — Product Requirements Document
 
-Status: v0.2 — review answers incorporated, awaiting final approval
+Status: v1.0 — implemented (see ARCHITECTURE.md and README.md)
 Source: [task_prompt.md](task_prompt.md)
 
 ## 1. Purpose
@@ -87,7 +87,7 @@ All other transitions are rejected; terminal states are immutable. Transitions u
 
 ### 4.5 Webhook notifications
 - FR-12: Customer default webhook URL (and signing secret) is configured per customer via `PUT /v1/customers/:customerId/webhook`; a task may override the URL at submission. Resolution order: task `webhookUrl`, then customer default, else `Skipped`. The resolved URL is snapshotted on the event. URL must be `https` (http allowed only in local/demo mode) and must not resolve to private/loopback addresses outside demo mode (SSRF protection).
-- FR-13: On terminal state, publish `task.completed`, `task.failed`, or `task.timed_out`. No multi-document transactions are used: the task is marked `eventEmitted=false` in its terminal transition, the event is created with a unique `(taskId, eventType)` key, and a reconciler creates any missing event, so a terminal task can never lose its event.
+- FR-13: On terminal state, publish `task.completed`, `task.failed`, or `task.timed_out`. No multi-document transactions are used: the task is marked `eventPending=true` in its terminal transition, the event is created with a unique `(taskId, eventType)` key, and a reconciler creates any missing event, so a terminal task can never lose its event.
 - FR-14: Event payload: `eventId`, `eventType`, `taskId`, `customerId`, `timestamp`, `data` (status, result summary or error, attempts, durations), `correlationId`.
 - FR-15: Delivery is asynchronous by a separate delivery worker. Every attempt is recorded: attempt number, start time, duration, HTTP status or network error, response snippet.
 - FR-16: Success = HTTP `2xx` within the delivery timeout. Non-2xx, timeouts, and network errors are retried with exponential backoff up to `maxDeliveryAttempts` (default 6); `410`/permanent `4xx` (except `408`, `429`) stop retries early. After exhaustion, delivery is `Failed` (dead-lettered, replayable by operator).

@@ -45,7 +45,7 @@ describe('TaskService', () => {
         slaMs: 120_000,
         correlationId: 'cor_1',
         webhookUrl: null,
-        eventEmitted: false,
+        eventPending: false,
         lease: null,
         result: null,
         error: null,

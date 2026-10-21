@@ -38,6 +38,7 @@ export const eventSchema = new Schema<EventDocument>(
     correlationId: { type: String, required: true },
     body: { type: Schema.Types.Mixed, required: true },
     url: { type: String, default: null },
+    taskFinishedAt: { type: Date, required: true },
     createdAt: { type: Date, required: true },
     delivery: { type: deliverySchema, required: true },
   },

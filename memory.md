@@ -1,58 +1,31 @@
 # TaskHub Working Memory
 
 ## Working agreement
-- Source requirements: docs/task_prompt.md. Stack: Node.js + MongoDB (local `MONGODB_URI`, no Docker).
-- Docs live in /docs (PRD.md, ARCHITECTURE.md, IMPROVEMENTS.md, task_prompt.md).
-- docs/IMPROVEMENTS.md is the single living list of production-readiness/future work (Redis queue etc.). Add to it whenever a shortcut is taken.
-- Step by step, user reviews each step before moving on. Do not implement everything at once.
-- Steps: 1) PRD  2) Architecture + tool choices  3) Implementation in slices  4) Unit tests for each slice (run and fix)  5) Demo + metrics.
-- Unit tests are generated alongside each code slice.
-- Rules: TypeScript only, NEVER use `any` (eslint enforces). Package manager: pnpm (not npm). Run single test files with `pnpm vitest run <path>` (no `--`).
-- Imports are extensionless (no `.js`, no `/index`): tsconfig uses module ESNext + moduleResolution Bundler; `pnpm build` bundles with tsup (tsup.config.ts) to dist/index.js; dev uses tsx, tests use vitest. Do not reintroduce `.js` specifiers or tsc-emitted builds.
-- Tests live in test/unit (Vitest, `pnpm test`, `pnpm test:cov`) and test/integration (`pnpm test:integration`, needs local mongod, uses throwaway DB taskhub_it_*, dropped after). 80% coverage threshold; shared mocks/fixtures in test/mocks (helpers, fixtures, inMemoryTaskRepository, logCapture, testDatabase).
-- Don't create stray files by mistake; user's own edit in package.json: start script is `npm run build && node dist/index.js` (leave it alone, don't commit it unless asked).
+- Source requirements: docs/task_prompt.md. Stack: Node.js 24 + TypeScript + Express 5 + Mongoose 9 + MongoDB (local `MONGODB_URI`, no Docker, no transactions).
+- Docs in /docs: PRD.md (v1.0), ARCHITECTURE.md (v1.0, describes the built system), IMPROVEMENTS.md (single living list of future work and known limitations; add to it whenever a shortcut is taken), task_prompt.md. Root README.md explains run/demo/API/tests.
+- Rules: TypeScript only, NEVER use `any` (eslint enforces). pnpm (not npm). Imports extensionless (no `.js`, no `/index`); tsconfig module ESNext + moduleResolution Bundler; `pnpm build` bundles with tsup to dist/index.js; dev uses tsx; tests use vitest. Single test file: `pnpm vitest run <path>` (no `--`).
+- Module layout: src/modules/<feature>/<feature>.{constants,types,model,repository,service,controller,routes,validation,utils}.ts + index.ts; shared code in src/shared; src/container.ts is the composition root; modules never import src/database; dependency direction tasks -> events -> webhooks/customers.
+- Tests: test/unit (no DB) mirrors src; test/integration (real local mongod, throwaway DBs taskhub_it_*, dropped after) incl. system.test.ts end to end; test/mocks has helpers, harness (real routers over in-memory fakes), fakes per module, webhookReceiver, testDatabase. Coverage threshold 80% (unit); Mongoose repos are covered by integration tests.
+- Edit tools: in single replace_string_in_file calls use real newlines (not `\n`); do not create stray files; never commit/push unless the user asks (commit-me skill = personal identity via `git -c user.name/email`).
+- User's own edit in package.json: `start` is `npm run build && node dist/index.js` (leave it).
 
-## Status
-- [x] Step 1: PRD -> docs/PRD.md (v0.2, review answers incorporated; decisions in PRD section 7)
-- [x] Step 2: Architecture + tools + schema -> docs/ARCHITECTURE.md (v0.2, approved by user; later switched to Mongoose + Winston)
-- [x] Slice 1 committed and pushed (a08aeec on origin/main, personal identity via commit-me skill).
-- [x] Slice 2: task submission API + idempotency: DONE, awaiting user review, NOT yet committed. 150 unit tests + 9 integration tests (real local Mongo, 50-way concurrent same-key race => 1 task) pass; typecheck/lint clean; ~94% unit coverage; curl-verified end to end.
-  - Files: src/api/{app,middleware,requestContext,parseSubmitRequest,schemas,taskView,tasksRouter}.ts, src/services/taskService.ts, src/db/taskRepository.ts, src/domain/{errors,payloadHash,webhookUrl}.ts
-  - POST /v1/tasks (202 new, 200 duplicate, 409 conflict, 400 validation, 413 too large), GET /v1/tasks/:taskId, GET /healthz.
-  - Per-type payload schemas (FR-4): document_processing{documentId}, report_generation{reportType}, data_sync{source,target}; optional simulate{durationMs,failure:retryable|fatal|hang,failTimes} hints for slice 3 handlers; extra fields allowed.
-  - Webhook override URL: https only, no credentials, no private/loopback hosts unless DEMO_MODE=true (literal-host check only; DNS pinning in IMPROVEMENTS).
-  - Correlation id: X-Correlation-Id accepted only if /^[A-Za-z0-9._:-]{1,128}$/, else generated (cor_ prefix); echoed in response header.
-  - Task view hides payload/lease/history/idempotencyKey. GET has no customer ownership check (no auth yet).
-- [x] Slice 2 refactored into modules (user request): feature modules under src/modules/{tasks,events,customers,webhooks,health}, shared code under src/shared/{errors,http,database,types,utils}, src/database (connection+indexes), src/app.ts composes. Tests mirror src (test/unit/<path>, test/integration/<path>, test/mocks + test/mocks/tasks). 161 unit + 9 integration tests pass, typecheck/lint clean. Layout + conventions documented in docs/ARCHITECTURE.md section 7.
-  - New code goes in a module: <name>.constants/types/model/repository/service/controller/routes/validation/utils + index.ts (createXModule wiring); no `any`; modules never import src/database; dependency direction tasks -> events -> webhooks/customers.
-- [ ] Slice 3: task worker module (claim via findOneAndUpdate, handlers, timeout, retry, terminal transitions) - next
-- [ ] Slices 4-8: see ARCHITECTURE section 8
-- Local env: Node 24, pnpm 11, local mongod running at mongodb://127.0.0.1:27017 (smoke tests use throwaway DB `taskhub_smoke`, dropped after).
-- pnpm-workspace.yaml allows esbuild build script (needed for tsx/vitest).
+## Status (all planned work implemented)
+- Committed and pushed: slice 1 (a08aeec) and slice 2 incl. module refactor (c73bc10) on origin/main.
+- NOT committed yet: slice 3 (task worker), slice 4 (reconciler), slice 5 (events + delivery + customers), slice 6 (list/ops/deliveries endpoints), slice 7 (metrics), slice 8 (mock receiver, demo, README), docs updates.
+- Final verification: typecheck + lint clean; 390 unit tests (85% coverage); 61 integration tests (stable over repeated runs); `pnpm build` ok; `pnpm demo` ran all PRD scenarios successfully.
 
-## Decisions (resolved by user answers)
-- customerId: plain string in request body, no auth for now.
-- TimedOut kept as separate terminal state (my decision). No Retrying state.
-- Defaults: timeout 30s, 3 attempts, backoff 1s x2 cap 30s w/ jitter; SLA doc 60s, report 120s, sync 300s (configurable).
-- Webhook: per-customer default + optional per-task override; many tasks per customer supported.
-- Keep p96 as written (p50/p96/p99). Mock webhook receiver in demo.
-- No transactions: CAS updates, unique indexes, reconciler creates missing events (eventEmitted flag).
-- Idempotency scope: (customerId, idempotencyKey), unique index; same key + different payload -> 409.
-- Execution and webhook delivery are at-least-once; stable eventId; HMAC signature.
-- Task handlers are simulated.
+## What exists
+- Task lifecycle: Pending, Running, Completed, Failed, TimedOut (added). Transitions guarded by CAS (`completeAttempt` on {_id, Running, attempts n, lease.workerId}); claim via findOneAndUpdate aggregation pipeline (lease = now + timeoutMs + grace). Retries with exponential backoff + jitter; timeouts via AbortController + race; late results ignored.
+- Reconciler: recovers expired leases (outcome Abandoned -> Pending or Failed when exhausted) and creates events for terminal tasks with eventPending=true; runs at startup and on RECONCILER_INTERVAL_MS.
+- Events: one per (taskId,eventType); created by worker `onTerminal` hook and reconciler through idempotent `EventService.emitForTask`; URL = task override else customer default else delivery `Skipped`; event stores `taskFinishedAt`.
+- Delivery: PollingWorker claims due events (expired leases count as free); HMAC `X-TaskHub-Signature: t=,v1=`; no redirects; 2xx delivers, network/timeout/408/429/5xx retry with backoff, other 4xx/3xx permanent; every attempt recorded; operator replay `POST /v1/deliveries/:id/retry`.
+- Customers: PUT/GET /v1/customers/:id/webhook (secret generated and returned once).
+- Ops: GET /v1/ops/tasks/:id/investigation (timeline + summary), GET /v1/ops/metrics/summary?window=5m|15m|1h|24h (exact nearest-rank p50/p96/p99, definitions, units, windows), GET /metrics (prom-client), GET /v1/tasks list with cursor pagination, GET /v1/tasks/:id/events, GET /v1/deliveries.
+- Logging: winston JSON with correlationId/taskId/customerId/eventId/attempt; request logging records route template via per-mount path (req.baseUrl is unreliable at finish).
+- Scripts: `pnpm receiver` (mock endpoint: ok|fail-n|always-500|slow|drop), `pnpm demo` (all PRD scenarios incl. SIGKILL restart recovery; uses/drops DB taskhub_demo).
 
-## Architecture picks
-- User decided: Express (v5), MongoDB only (Redis/BullMQ only in IMPROVEMENTS.md). Node 24 (user edited runtime row).
-- TypeScript, zod, Mongoose 9 (NOT the raw mongodb driver), winston (NOT pino; no pino-http, write own request-logging middleware), prom-client, Vitest, built-in fetch.
-- Mongoose conventions: schemas in src/db/schemas.ts with versionKey/timestamps/autoIndex off, minimize off; models per connection (connection.model) in src/db/client.ts; indexes via ensureIndexes() at startup; use findOneAndUpdate + .lean() for claims/CAS; avoid deprecated validateSync (use validate()).
-- JsonObject/JsonArray are interfaces on purpose (recursive type aliases cause TS2589 in Mongoose schemas).
-- Logger: createLogger(config, bindings, transports?) ; tests use test/mocks/logCapture.ts; redaction masks secret/authorization/x-taskhub-signature keys.
-- Collections: customers, tasks, events (event + delivery attempts in one doc). MongoDB is the queue (polling).
-- Roles: api, worker, delivery, reconciler via ROLES env.
-- Exact percentiles computed in app from persisted timestamps; Prometheus histograms for live.
+## Decisions (user answers)
+- customerId plain string in body, no auth. TimedOut separate state. Defaults: timeout 30s, 3 attempts, backoff 1s x2 cap 30s + jitter; SLA doc 60s / report 120s / sync 300s. Per-customer webhook + optional per-task override; many tasks per customer. Keep p96. MongoDB only (Redis in IMPROVEMENTS). No transactions (eventPending flag + reconciler).
 
-## Open questions
-- TypeScript vs plain JS not explicitly confirmed (assumed TypeScript); schema/slice order awaiting approval.
-
-## Review log
-- (none yet)
+## Known gaps (see docs/IMPROVEMENTS.md "Known limitations")
+- Unauthenticated ops/metrics/list endpoints; prom-client flagged deprecated on npm; API percentiles are process-local; summary loads up to 100k samples; per-task URL without customer secret is unsigned; Skipped events not re-evaluated after webhook is configured; no retention.

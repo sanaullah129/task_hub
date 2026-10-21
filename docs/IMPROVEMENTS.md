@@ -74,3 +74,19 @@ Living list of things deliberately left out of the current scope. Add items as t
 | Dockerfile and deployment manifests | Reproducible runtime | Deployment |
 | Load and soak testing with recorded baselines | Validate NFR targets | Before launch |
 | Contract tests against the webhook receiver spec | Catch signature/payload regressions | Customer integrations |
+
+## Known limitations of the current implementation
+
+| Item | Why it matters | Suggested fix |
+| --- | --- | --- |
+| `/v1/ops/*`, `/v1/deliveries`, `/metrics`, and `GET /v1/tasks*` are unauthenticated; the investigation endpoint returns task payloads | Operator data and customer payloads are exposed to anyone who can reach the API | Authentication, operator role, payload redaction in ops views |
+| prom-client is flagged deprecated on npm ("replaced by @prometheus-io/client") | It works today, but may stop receiving fixes | Evaluate and migrate behind the existing `Metrics` facade (only `observability/metrics.ts` changes) |
+| API percentiles in the summary come from a process-local ring buffer and reset on restart | With several API processes each reports only its own traffic | Aggregate Prometheus histograms (`histogram_quantile`) or a shared store |
+| The summary loads up to 100,000 samples per query into memory | Large windows or volumes become slow | Pre-aggregated rollups or MongoDB `$percentile` on 7.0+ |
+| Webhooks for a customer without a stored secret (per-task URL override only) are sent unsigned | Receiver cannot verify authenticity | Require a secret before accepting a per-task override |
+| The event URL is snapshotted when the event is created, so a customer who configures a webhook later does not receive earlier `Skipped` events | Missed notifications for early tasks | Operator action to re-evaluate and requeue `Skipped` events |
+| Every process with the reconciler role scans on its own interval | Redundant scans (safe because writes are compare-and-set) | Leader election or a scan lease |
+| Concurrent first-time `PUT /v1/customers/:id/webhook` for the same customer can hit a duplicate-key race | One request may fail with 500 | Retry the upsert once on duplicate key |
+| No per-endpoint concurrency or rate limit for deliveries | One slow customer endpoint can occupy delivery workers | Per-endpoint limits plus the circuit breaker listed above |
+| Task retention is unbounded | Collections grow forever | TTL indexes or archival (see Data and consistency) |
+

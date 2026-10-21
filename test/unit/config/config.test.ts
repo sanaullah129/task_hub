@@ -13,6 +13,7 @@ describe('loadConfig', () => {
     expect(config.task.maxAttempts).toBe(3);
     expect(config.task.retry).toEqual({ baseMs: 1_000, capMs: 30_000 });
     expect(config.delivery.maxAttempts).toBe(6);
+    expect(config.task.shutdownTimeoutMs).toBe(15_000);
     expect(config.task.types.document_processing).toEqual({ timeoutMs: 30_000, slaMs: 60_000 });
     expect(config.task.types.report_generation.slaMs).toBe(120_000);
     expect(config.task.types.data_sync.slaMs).toBe(300_000);

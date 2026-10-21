@@ -1,8 +1,8 @@
 import request, { type Response } from 'supertest';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { createApp } from '../../../../src/app';
+import { buildHarness } from '../../../mocks/harness';
 import { InMemoryTaskRepository } from '../../../mocks/tasks/inMemoryTaskRepository';
-import { silentLogger, testConfig, validSubmitBody } from '../../../mocks/helpers';
+import { validSubmitBody } from '../../../mocks/helpers';
 
 const bodyOf = (res: Response): Record<string, unknown> => res.body as Record<string, unknown>;
 const errorOf = (res: Response): Record<string, unknown> => bodyOf(res)['error'] as Record<string, unknown>;
@@ -10,13 +10,7 @@ const errorOf = (res: Response): Record<string, unknown> => bodyOf(res)['error']
 describe('task routes', () => {
   let repository: InMemoryTaskRepository;
 
-  const build = (env: Record<string, string> = {}): ReturnType<typeof createApp> =>
-    createApp({
-      config: testConfig(env),
-      logger: silentLogger(),
-      taskRepository: repository,
-      isHealthy: () => Promise.resolve(true),
-    });
+  const build = (env: Record<string, string> = {}) => buildHarness({ tasks: repository, env }).app;
 
   beforeEach(() => {
     repository = new InMemoryTaskRepository();

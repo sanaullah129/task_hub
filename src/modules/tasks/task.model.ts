@@ -55,7 +55,7 @@ export const taskSchema = new Schema<TaskDocument>(
     error: { type: taskErrorSchema, default: null },
     attemptLog: { type: [attemptLogSchema], default: [] },
     history: { type: [historySchema], default: [] },
-    eventEmitted: { type: Boolean, required: true, default: false },
+    eventPending: { type: Boolean, required: true, default: false },
     createdAt: { type: Date, required: true },
     updatedAt: { type: Date, required: true },
     firstStartedAt: { type: Date, default: null },
@@ -68,8 +68,8 @@ taskSchema.index({ customerId: 1, idempotencyKey: 1 }, { name: 'uniq_customer_id
 taskSchema.index({ status: 1, nextRunAt: 1 }, { name: 'claim_due' });
 taskSchema.index({ status: 1, 'lease.expiresAt': 1 }, { name: 'lease_expiry' });
 taskSchema.index(
-  { eventEmitted: 1 },
-  { name: 'event_pending', partialFilterExpression: { eventEmitted: false } },
+  { eventPending: 1 },
+  { name: 'event_pending', partialFilterExpression: { eventPending: true } },
 );
 taskSchema.index({ customerId: 1, createdAt: -1 }, { name: 'customer_created' });
 taskSchema.index({ finishedAt: 1 }, { name: 'finished_at' });

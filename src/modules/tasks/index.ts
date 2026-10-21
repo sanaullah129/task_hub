@@ -22,6 +22,14 @@ export function createTasksModule(deps: {
 }
 
 export { TaskService } from './task.service';
-export { MongooseTaskRepository, type TaskRepository } from './task.repository';
+export { MongooseTaskRepository, type TaskListQuery, type TaskPage, type TaskRepository } from './task.repository';
+export { MongooseTaskRecoveryRepository, type TaskRecoveryRepository } from './task.recovery.repository';
+export {
+  MongooseTaskExecutionRepository,
+  type AttemptCompletion,
+  type AttemptKey,
+  type ClaimOptions,
+  type TaskExecutionRepository,
+} from './task.execution.repository';
 export { taskSchema } from './task.model';
 export type { TaskDocument } from './task.types';

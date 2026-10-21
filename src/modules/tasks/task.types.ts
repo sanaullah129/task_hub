@@ -44,7 +44,7 @@ export interface TaskDocument {
   error: TaskError | null;
   attemptLog: AttemptLogEntry[];
   history: HistoryEntry[];
-  eventEmitted: boolean;
+  eventPending: boolean;
   createdAt: Date;
   updatedAt: Date;
   firstStartedAt: Date | null;

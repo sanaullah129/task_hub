@@ -1,9 +1,8 @@
 import request, { type Response } from 'supertest';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { createApp } from '../../../src/app';
 import { createLogger } from '../../../src/observability/logger';
+import { buildHarness } from '../../mocks/harness';
 import { InMemoryTaskRepository } from '../../mocks/tasks/inMemoryTaskRepository';
-import { testConfig } from '../../mocks/helpers';
 import { createLogCapture, type LogCapture } from '../../mocks/logCapture';
 
 const bodyOf = (res: Response): Record<string, unknown> => res.body as Record<string, unknown>;
@@ -12,17 +11,15 @@ const errorOf = (res: Response): Record<string, unknown> => bodyOf(res)['error']
 describe('shared HTTP middleware', () => {
   let capture: LogCapture;
   let repository: InMemoryTaskRepository;
-  let app: ReturnType<typeof createApp>;
+  let app: ReturnType<typeof buildHarness>['app'];
 
   beforeEach(() => {
     capture = createLogCapture();
     repository = new InMemoryTaskRepository();
-    app = createApp({
-      config: testConfig(),
+    app = buildHarness({
+      tasks: repository,
       logger: createLogger({ logLevel: 'http' }, {}, [capture.transport]),
-      taskRepository: repository,
-      isHealthy: () => Promise.resolve(true),
-    });
+    }).app;
   });
 
   describe('correlation id', () => {
@@ -80,12 +77,7 @@ describe('shared HTTP middleware', () => {
     });
 
     it('returns 413 when the body exceeds the payload limit', async () => {
-      const small = createApp({
-        config: testConfig({ MAX_PAYLOAD_BYTES: '200' }),
-        logger: createLogger({ logLevel: 'silent' }),
-        taskRepository: repository,
-        isHealthy: () => Promise.resolve(true),
-      });
+      const small = buildHarness({ tasks: repository, env: { MAX_PAYLOAD_BYTES: '200' } }).app;
 
       const res = await request(small).post('/v1/tasks').send({ payload: { text: 'x'.repeat(500) } });
 

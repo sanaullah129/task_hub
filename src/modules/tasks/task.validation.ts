@@ -2,16 +2,20 @@ import { z } from 'zod';
 import { ValidationError } from '../../shared/errors/appErrors';
 import type { JsonObject } from '../../shared/types/json';
 import { formatZodIssues } from '../../shared/utils/zod';
+import { customerIdSchema } from '../customers/customer.validation';
 import { validateWebhookUrl } from '../webhooks/webhookUrl';
-import { TASK_TYPES, type TaskType } from './task.constants';
+import { TASK_STATUSES, TASK_TYPES, type TaskType } from './task.constants';
+import type { TaskListQuery } from './task.repository';
+import { parseLimit } from '../../shared/utils/pagination';
 
-const simulate = z
-  .object({
-    durationMs: z.number().int().min(0).max(600_000).optional(),
-    failure: z.enum(['retryable', 'fatal', 'hang']).optional(),
-    failTimes: z.number().int().min(0).max(10).optional(),
-  })
-  .optional();
+export const simulationSchema = z.object({
+  durationMs: z.number().int().min(0).max(600_000).optional(),
+  failure: z.enum(['retryable', 'fatal', 'hang']).optional(),
+  failTimes: z.number().int().min(0).max(10).optional(),
+});
+export type Simulation = z.infer<typeof simulationSchema>;
+
+const simulate = simulationSchema.optional();
 
 export const PAYLOAD_SCHEMAS: Readonly<Record<TaskType, z.ZodType>> = {
   document_processing: z.looseObject({ documentId: z.string().min(1).max(256), simulate }),
@@ -23,11 +27,7 @@ export const PAYLOAD_SCHEMAS: Readonly<Record<TaskType, z.ZodType>> = {
   }),
 };
 
-const identifier = z
-  .string()
-  .min(1)
-  .max(128)
-  .regex(/^[A-Za-z0-9._:@-]+$/, 'may only contain letters, digits and . _ : @ -');
+const identifier = customerIdSchema;
 
 export const submitTaskSchema = z.object({
   customerId: identifier,
@@ -65,4 +65,26 @@ export function parseSubmitRequest(body: unknown, options: { demoMode: boolean }
   if (details.length > 0) throw new ValidationError(details);
 
   return { customerId, taskType, payload, idempotencyKey, webhookUrl: normalizedWebhookUrl };
+}
+
+const listQuerySchema = z.object({
+  customerId: customerIdSchema.optional(),
+  status: z.enum(TASK_STATUSES).optional(),
+  cursor: z.string().min(1).max(512).optional(),
+});
+
+export function parseTaskListQuery(query: Record<string, unknown>): TaskListQuery {
+  const parsed = listQuerySchema.safeParse({
+    customerId: query['customerId'],
+    status: query['status'],
+    cursor: query['cursor'],
+  });
+  if (!parsed.success) throw new ValidationError(formatZodIssues(parsed.error, { root: 'query' }));
+  const { customerId, status, cursor } = parsed.data;
+  return {
+    limit: parseLimit(query['limit']),
+    ...(customerId === undefined ? {} : { customerId }),
+    ...(status === undefined ? {} : { status }),
+    ...(cursor === undefined ? {} : { cursor }),
+  };
 }

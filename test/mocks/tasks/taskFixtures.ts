@@ -23,7 +23,7 @@ export function buildTaskDocument(overrides: Partial<TaskDocument> = {}): TaskDo
     error: null,
     attemptLog: [],
     history: [{ from: null, to: 'Pending', at: FIXED_NOW, reason: 'submitted' }],
-    eventEmitted: false,
+    eventPending: false,
     createdAt: FIXED_NOW,
     updatedAt: FIXED_NOW,
     firstStartedAt: null,

@@ -40,6 +40,7 @@ export interface EventDocument {
   correlationId: string;
   body: EventBody;
   url: string | null;
+  taskFinishedAt: Date;
   createdAt: Date;
   delivery: Delivery;
 }

@@ -22,7 +22,7 @@ describe('task schema', () => {
 
   it('limits the reconciler index to tasks still missing an event', () => {
     const [, options] = indexByName('event_pending') ?? [];
-    expect(options).toMatchObject({ partialFilterExpression: { eventEmitted: false } });
+    expect(options).toMatchObject({ partialFilterExpression: { eventPending: true } });
   });
 
   it('indexes claiming of due tasks and lease recovery', () => {

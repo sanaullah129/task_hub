@@ -46,6 +46,7 @@ const envSchema = z.object({
   TASK_MAX_ATTEMPTS: positiveInt(3),
   TASK_TIMEOUT_MS: positiveInt(30_000),
   TASK_LEASE_GRACE_MS: positiveInt(10_000),
+  TASK_SHUTDOWN_TIMEOUT_MS: positiveInt(15_000),
   TASK_RETRY_BASE_MS: positiveInt(1_000),
   TASK_RETRY_CAP_MS: positiveInt(30_000),
   MAX_PAYLOAD_BYTES: positiveInt(100_000),
@@ -54,6 +55,7 @@ const envSchema = z.object({
   SLA_DATA_SYNC_MS: positiveInt(300_000),
 
   DELIVERY_POLL_INTERVAL_MS: positiveInt(500),
+  DELIVERY_CONCURRENCY: positiveInt(4),
   DELIVERY_TIMEOUT_MS: positiveInt(10_000),
   DELIVERY_MAX_ATTEMPTS: positiveInt(6),
   DELIVERY_BACKOFF_BASE_MS: positiveInt(1_000),
@@ -84,12 +86,14 @@ export interface Config {
     concurrency: number;
     maxAttempts: number;
     leaseGraceMs: number;
+    shutdownTimeoutMs: number;
     maxPayloadBytes: number;
     retry: BackoffConfig;
     types: Readonly<Record<TaskType, TaskTypeConfig>>;
   };
   delivery: {
     pollIntervalMs: number;
+    concurrency: number;
     timeoutMs: number;
     maxAttempts: number;
     backoff: BackoffConfig;
@@ -133,12 +137,14 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
       concurrency: e.TASK_CONCURRENCY,
       maxAttempts: e.TASK_MAX_ATTEMPTS,
       leaseGraceMs: e.TASK_LEASE_GRACE_MS,
+      shutdownTimeoutMs: e.TASK_SHUTDOWN_TIMEOUT_MS,
       maxPayloadBytes: e.MAX_PAYLOAD_BYTES,
       retry: { baseMs: e.TASK_RETRY_BASE_MS, capMs: e.TASK_RETRY_CAP_MS },
       types,
     },
     delivery: {
       pollIntervalMs: e.DELIVERY_POLL_INTERVAL_MS,
+      concurrency: e.DELIVERY_CONCURRENCY,
       timeoutMs: e.DELIVERY_TIMEOUT_MS,
       maxAttempts: e.DELIVERY_MAX_ATTEMPTS,
       backoff: { baseMs: e.DELIVERY_BACKOFF_BASE_MS, capMs: e.DELIVERY_BACKOFF_CAP_MS },
