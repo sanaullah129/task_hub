@@ -3,6 +3,7 @@ import type { AppRoute } from './app';
 import type { Database } from './database/client';
 import { MongooseCustomerRepository, createCustomersModule } from './modules/customers';
 import { createDeliveryModule } from './modules/delivery';
+import { createDocsRouter } from './modules/docs';
 import { MongooseEventRepository, EventService, createEventsModule } from './modules/events';
 import { createExecutionModule } from './modules/execution';
 import { createHealthModule } from './modules/health';
@@ -67,6 +68,7 @@ export function createContainer(deps: { config: Config; logger: Logger; database
   const routes: AppRoute[] = [
     { path: '/healthz', router: health.router },
     { path: '/', router: metricsModule.router },
+    { path: '/', router: createDocsRouter() },
     { path: '/v1/tasks', router: tasks.router },
     { path: '/v1/customers', router: customers.router },
     { path: '/v1', router: events.router },

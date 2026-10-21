@@ -1,7 +1,7 @@
 # TaskHub
 
 Asynchronous task execution service with reliable webhook notifications, built with Node.js, TypeScript, Express and MongoDB.
-Requirements: [docs/task_prompt.md](docs/task_prompt.md). Design: [docs/PRD.md](docs/PRD.md), [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). Future work: [docs/IMPROVEMENTS.md](docs/IMPROVEMENTS.md).
+Requirements: [docs/task_prompt.md](docs/task_prompt.md). Usage and monitoring guide: [docs/USAGE.md](docs/USAGE.md). Design: [docs/PRD.md](docs/PRD.md), [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). Future work: [docs/IMPROVEMENTS.md](docs/IMPROVEMENTS.md).
 
 ## Prerequisites
 
@@ -49,6 +49,8 @@ metrics (p50/p96/p99 and business outcomes), and a single-task investigation wit
 database `taskhub_demo`.
 
 ## API
+
+Interactive docs (Swagger UI) are served at `http://localhost:3000/docs`, and the OpenAPI 3 document at `/openapi.json`. Use **Try it out** to call any endpoint from the browser.
 
 | Method and path | Purpose |
 | --- | --- |
