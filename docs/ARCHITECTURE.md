@@ -282,3 +282,14 @@ Conventions: modules never import from `database/` (it imports their schemas); a
 | At-least-once execution | A crash mid-handler can re-run it; handlers must be idempotent |
 | Exact percentiles in app | Loads window samples into memory; fine for demo, would move to pre-aggregation at scale |
 | Timeout of simulated handlers | Real handlers must honor `AbortSignal`; the worker still ignores late results via CAS |
+
+## 10. Engineering constraints and how they are met
+
+| Constraint | How it is met |
+| --- | --- |
+| Records survive restarts | All task and event state lives in MongoDB (`tasks`, `events`, `customers`); workers hold no state. Leases expire and the reconciler recovers anything a dead process left behind. |
+| No duplicate tasks for the same idempotency key | Unique index on `(customerId, idempotencyKey)` plus a request fingerprint. A repeat returns the existing task (200); the same key with a different body is rejected (409). Concurrent inserts are resolved by the index. |
+| Concurrent workers coordinate ownership | A worker claims a task with an atomic `findOneAndUpdate` (status `Pending` to `Running`, sets `lease.workerId` and expiry). Every later write is a compare-and-set on `workerId` and `attempt`, so a worker that lost its lease cannot overwrite the result. Events and deliveries use the same pattern. |
+| Customer data and webhook secrets are protected | Webhook secrets are encrypted at rest with AES-256-GCM (`SECRETS_ENCRYPTION_KEY`, required in production), returned once and never read back. Outgoing webhooks are HMAC signed with a timestamp. Logs redact secrets and record only the webhook host, never URLs or payloads. `/metrics`, `/v1/ops/*` and `/v1/deliveries*` need `OPS_API_TOKEN` (required in production). |
+| Partial failures never silently lose accepted work | Task and event are separate writes without a transaction. The task carries an `eventPending` marker set with the terminal state; the reconciler emits any missing event and clears the marker. Stuck leases, orphaned `Pending` work and failed deliveries are retried with backoff, and exhausted deliveries stay visible as `Failed` and can be replayed by an operator. |
+| Practical limits and next steps | See [IMPROVEMENTS.md](IMPROVEMENTS.md): a single MongoDB instance as the queue (polling, roughly hundreds of tasks per second), no customer authentication yet, one static encryption key, unbounded retention, process-local API percentiles, and the path to a broker, KMS, per-customer API keys and rate limits. |

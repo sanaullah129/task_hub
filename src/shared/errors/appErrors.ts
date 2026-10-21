@@ -16,6 +16,12 @@ export class ValidationError extends AppError {
   }
 }
 
+export class UnauthorizedError extends AppError {
+  constructor() {
+    super(401, 'unauthorized', 'A valid bearer token is required');
+  }
+}
+
 export class NotFoundError extends AppError {
   constructor(resource: string, id: string) {
     super(404, `${resource}_not_found`, `${resource} ${id} was not found`);

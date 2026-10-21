@@ -17,6 +17,8 @@ pnpm build && node dist/index.js
 ```
 
 Roles can be split with `ROLES=api,worker,delivery,reconciler` (comma separated; run several processes for scale).
+
+Security settings: `SECRETS_ENCRYPTION_KEY` (64 hex characters, encrypts webhook secrets; generate with `openssl rand -hex 32`) and `OPS_API_TOKEN` (min 16 characters; callers send `Authorization: Bearer <token>` to `/metrics`, `/v1/ops/*` and `/v1/deliveries*`). Both are optional in development and required when `NODE_ENV=production`.
 Configuration is read from environment variables; defaults and validation are in [src/config/config.ts](src/config/config.ts), examples in [.env.example](.env.example).
 
 ## Try it

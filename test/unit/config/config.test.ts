@@ -2,6 +2,13 @@ import { describe, expect, it } from 'vitest';
 import { ConfigError, loadConfig } from '../../../src/config/config';
 
 describe('loadConfig', () => {
+  it('requires the encryption key and ops token in production and validates their format', () => {
+    expect(() => loadConfig({ NODE_ENV: 'production' })).toThrow(ConfigError);
+    expect(() => loadConfig({ SECRETS_ENCRYPTION_KEY: 'short' })).toThrow(ConfigError);
+    const config = loadConfig({ NODE_ENV: 'production', SECRETS_ENCRYPTION_KEY: 'a'.repeat(64), OPS_API_TOKEN: 'x'.repeat(16) });
+    expect(config.security).toEqual({ secretsKey: 'a'.repeat(64), opsToken: 'x'.repeat(16) });
+  });
+
   it('applies documented defaults for an empty environment', () => {
     const config = loadConfig({});
 

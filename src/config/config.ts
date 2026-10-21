@@ -62,6 +62,12 @@ const envSchema = z.object({
   DELIVERY_BACKOFF_CAP_MS: positiveInt(60_000),
 
   RECONCILER_INTERVAL_MS: positiveInt(5_000),
+
+  SECRETS_ENCRYPTION_KEY: z
+    .string()
+    .regex(/^[0-9a-fA-F]{64}$/, 'must be 64 hex characters (32 bytes)')
+    .optional(),
+  OPS_API_TOKEN: z.string().min(16).optional(),
 });
 
 export interface BackoffConfig {
@@ -99,6 +105,7 @@ export interface Config {
     backoff: BackoffConfig;
   };
   reconcilerIntervalMs: number;
+  security: { secretsKey: string | undefined; opsToken: string | undefined };
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
@@ -116,6 +123,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   }
   if (e.DELIVERY_BACKOFF_CAP_MS < e.DELIVERY_BACKOFF_BASE_MS) {
     issues.push('DELIVERY_BACKOFF_CAP_MS: must be >= DELIVERY_BACKOFF_BASE_MS');
+  }
+  if (e.NODE_ENV === 'production') {
+    if (e.SECRETS_ENCRYPTION_KEY === undefined) issues.push('SECRETS_ENCRYPTION_KEY: required in production');
+    if (e.OPS_API_TOKEN === undefined) issues.push('OPS_API_TOKEN: required in production');
   }
   if (issues.length > 0) throw new ConfigError(issues);
 
@@ -150,5 +161,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
       backoff: { baseMs: e.DELIVERY_BACKOFF_BASE_MS, capMs: e.DELIVERY_BACKOFF_CAP_MS },
     },
     reconcilerIntervalMs: e.RECONCILER_INTERVAL_MS,
+    security: { secretsKey: e.SECRETS_ENCRYPTION_KEY, opsToken: e.OPS_API_TOKEN },
   };
 }

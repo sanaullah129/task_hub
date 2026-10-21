@@ -18,7 +18,7 @@ async function main(): Promise<void> {
   let server: Server | undefined;
   if (config.roles.includes('api')) {
     const apiLogger = logger.child({ role: 'api' });
-    const app = createApp({ config, logger: apiLogger, routes: container.routes, metrics: container.metrics });
+    const app = createApp({ config, logger: apiLogger, routes: container.routes, metrics: container.metrics, opsToken: config.security.opsToken });
     server = app.listen(config.port, () => apiLogger.info('api listening', { port: config.port }));
   }
   for (const lifecycle of container.lifecycles) lifecycle.start();

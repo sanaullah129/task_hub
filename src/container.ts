@@ -18,6 +18,7 @@ import {
 } from './modules/tasks';
 import type { Logger } from './observability/logger';
 import { createMetrics, type Metrics } from './observability/metrics';
+import { createSecretBox } from './shared/security/secretBox';
 
 export interface Lifecycle {
   name: Role;
@@ -40,7 +41,9 @@ export function createContainer(deps: { config: Config; logger: Logger; database
   const executionRepository = new MongooseTaskExecutionRepository(database.tasks);
   const recoveryRepository = new MongooseTaskRecoveryRepository(database.tasks);
   const eventRepository = new MongooseEventRepository(database.events);
-  const customerRepository = new MongooseCustomerRepository(database.customers);
+  const secretBox = config.security.secretsKey === undefined ? undefined : createSecretBox(config.security.secretsKey);
+  if (secretBox === undefined) logger.warn('SECRETS_ENCRYPTION_KEY is not set, webhook secrets are stored in plain text');
+  const customerRepository = new MongooseCustomerRepository(database.customers, secretBox);
   const metricsRepository = new MongooseMetricsRepository(database.tasks, database.events);
 
   const metrics = createMetrics({ taskCount: (status) => metricsRepository.taskCount(status) });

@@ -20,7 +20,7 @@ Living list of things deliberately left out of the current scope. Add items as t
 | Retention: TTL indexes and archival of old tasks/events | Bounded storage | Data growth |
 | Pre-aggregated metrics (rollup collection or time-series store) | Exact percentiles over large windows without loading samples into memory | Large windows or high volume |
 | Schema versioning and migrations | Safe schema evolution | First schema change |
-| Encrypt webhook secrets at rest (KMS or field-level encryption) | Secrets are currently stored as plain fields | Before real customers |
+| Encrypt webhook secrets with a KMS-managed key and support key rotation | Secrets are encrypted with AES-256-GCM using one static `SECRETS_ENCRYPTION_KEY` from the environment | Before real customers |
 | Payload storage offload (object storage) for large payloads/results | Document size limit and DB bloat | Large documents/reports |
 | Move `history[]` and `attemptLog[]` to a separate `task_history` collection (one document per transition/attempt) | Embedded arrays are bounded today; a collection allows unbounded history, richer queries, and metrics aggregation without loading whole tasks | More states/attempts per task, or metrics queries become slow |
 
@@ -79,7 +79,7 @@ Living list of things deliberately left out of the current scope. Add items as t
 
 | Item | Why it matters | Suggested fix |
 | --- | --- | --- |
-| `/v1/ops/*`, `/v1/deliveries`, `/metrics`, and `GET /v1/tasks*` are unauthenticated; the investigation endpoint returns task payloads | Operator data and customer payloads are exposed to anyone who can reach the API | Authentication, operator role, payload redaction in ops views |
+| `GET /v1/tasks*`, `/v1/customers/*` and task submission are unauthenticated; `/metrics`, `/v1/ops/*` and `/v1/deliveries*` use one shared bearer token (`OPS_API_TOKEN`) when it is set, and the investigation endpoint returns task payloads | Customer payloads are exposed to anyone who can reach the API; one shared token has no per-operator identity or rotation | Per-customer API keys or JWT, operator roles, payload redaction in ops views |
 | prom-client is flagged deprecated on npm ("replaced by @prometheus-io/client") | It works today, but may stop receiving fixes | Evaluate and migrate behind the existing `Metrics` facade (only `observability/metrics.ts` changes) |
 | API percentiles in the summary come from a process-local ring buffer and reset on restart | With several API processes each reports only its own traffic | Aggregate Prometheus histograms (`histogram_quantile`) or a shared store |
 | The summary loads up to 100,000 samples per query into memory | Large windows or volumes become slow | Pre-aggregated rollups or MongoDB `$percentile` on 7.0+ |
